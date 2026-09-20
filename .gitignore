@@ -1,0 +1,5 @@
+﻿export/
+.gradle/
+*.log
+haxe-3.4.7/
+.vscode/
