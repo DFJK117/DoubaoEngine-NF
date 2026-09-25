@@ -1,0 +1,61 @@
+name: Doubao Engine Windows Build
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Haxe
+        uses: krdlab/setup-haxe@master
+        with:
+          haxe-version: 4.3.7
+
+      - name: Install libs
+        shell: pwsh
+        run: |
+          haxelib setup C:\haxelib
+          haxelib install hmm --quiet
+          haxelib run hmm install
+
+      - name: Enable long paths
+        shell: pwsh
+        run: Set-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Control\FileSystem" -Name "LongPathsEnabled" -Value 1 -Type DWord -Force
+
+      - name: Compile
+        shell: pwsh
+        run: haxelib run lime build windows -Dlegacy_gc_compare
+
+      - name: Package
+        shell: pwsh
+        run: |
+          $bin = "export\legacy-gc\windows\bin"
+          if (Test-Path $bin) {
+            Compress-Archive -Path "$bin\*" -DestinationPath DoubaoEngine-Windows.zip -Force
+          } else {
+            Write-Output "bin dir not found, listing export:"
+            Get-ChildItem export -Recurse -Directory | Select-Object FullName
+            exit 1
+          }
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: DoubaoEngine-Windows
+          path: DoubaoEngine-Windows.zip
+
+      - name: Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: doubao-windows
+          name: Doubao Engine Windows
+          files: DoubaoEngine-Windows.zip
