@@ -398,7 +398,7 @@ class ChartingState extends MusicBeatState
 		\nLeft/Right - Change Snap
 		\nUp/Down - Change Conductor's Strum Time with Snapping"
 				+ #if FLX_PITCH "\nLeft Bracket / Right Bracket - Change Song Playback Rate (SHIFT to go Faster)
-				+ #if FLX_PITCH "\nShift + A/D or Shift + Left/Right - Move Editing Area Left/Right"
+				\nShift + A/D or Shift + Left/Right - Move Editing Area Left/Right
 		\nALT + Left Bracket / Right Bracket - Reset Song Playback Rate"
 				+ #end "\nHold Shift to move 4x faster
 		\nZ/X - Zoom in/out
