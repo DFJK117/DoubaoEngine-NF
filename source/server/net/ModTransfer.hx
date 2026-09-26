@@ -124,14 +124,6 @@ class ModTransfer
 		}
 	}
 
-	static function deleteFile(path:String):Void
-	{
-		try
-			if (FileSystem.exists(path))
-				FileSystem.deleteFile(path)
-		catch (e:Dynamic) {}
-	}
-
 	// ------------------------------------------------------------ 歌 → 模组
 	/**
 	 * 反查：这首歌在哪个 mod 里。
@@ -448,8 +440,10 @@ class ModTransfer
 	{
 		#if sys
 		try
+		{
 			if (FileSystem.exists(path))
-				FileSystem.deleteFile(path)
+				FileSystem.deleteFile(path);
+		}
 		catch (e:Dynamic) {}
 		#end
 	}
