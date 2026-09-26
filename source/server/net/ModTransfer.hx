@@ -100,7 +100,7 @@ class ModTransfer
 	{
 		if (n == null || n.length == 0 || n.length > 512)
 			return false;
-		if (n.indexOf('\0') >= 0 || n.indexOf('..') >= 0 || n.indexOf(':') >= 0)
+		if (n.indexOf(String.fromCharCode(0)) >= 0 || n.indexOf('..') >= 0 || n.indexOf(':') >= 0)
 			return false;
 		if (n.indexOf('\\') >= 0)
 			return false;
