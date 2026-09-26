@@ -51,6 +51,7 @@ class NovaNet
 	public static var roomDiff:String = "normal";
 	public static var roomHost:String = "";
 	public static var roomCode:String = "";      // 服务器下发的 6 位房间码
+	public static var roomMod:String = "";       // 房间正在分发的模组目录名（'' = 官方曲目）
 	public static var startAt:Float = 0;       // 服务器下发的开局时间(秒, unix)
 	public static var localTimeOffset:Float = 0;
 
@@ -200,12 +201,22 @@ class NovaNet
 		raw('JOINCODE|code=' + cc + '|spec=' + (spectate ? "1" : "0") + '|team=' + team);
 	}
 
+	/** 房主发布模组分发（name=mod 目录名，size=包字节数，sha=包的 sha256） */
+	public static function modPub(name:String, size:Int, sha:String):Void
+		raw('MODPUB|name=' + StringTools.replace(StringTools.replace(name, "|", " "), "\n", " ")
+			+ '|size=' + size + '|sha=' + sha);
+
+	/** 客机收妥（并校验通过）后上报，服务器会立刻删掉缓存副本 */
+	public static function modDone(token:String, ok:Bool):Void
+		raw('MODDONE|token=' + token + '|ok=' + (ok ? "1" : "0"));
+
 	public static function leaveRoom():Void
 	{
 		raw('LEAVEROOM');
 		inRoom = false;
 		roomId = -1;
 		roomCode = "";
+		roomMod = "";
 	}
 
 	public static function chat(text:String):Void
@@ -338,6 +349,8 @@ class NovaNet
 		case "KICK":
 				inRoom = false;
 				roomId = -1;
+		case "MODAVAIL", "MODREADY", "MODCLEAR":
+				roomMod = field(msg, "name", roomMod);
 		}
 		return t;
 	}

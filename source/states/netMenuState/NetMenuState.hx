@@ -57,6 +57,24 @@ class NetMenuState extends MusicBeatState
 	var wantSpectate:Bool = false;
 	var wantCode:Bool = false;      // 输入框是否处于「输房间码」模式
 
+	// ---- 模组分发（二期）
+	var modState:Int = 0;           // 0 无 1 待下载 2 传输中 3 已装好
+	var modToken:String = "";
+	var modName:String = "";
+	var modSha:String = "";
+	var modSize:Int = 0;
+	var modPort:Int = 0;
+	var modUri:String = "";
+	var modReady:Bool = false;
+	var modProgress:Float = 0;
+	var modBusy:Bool = false;
+	var redrawTick:Float = 0;
+	var pendingUploadPath:String = "";
+	var pendingUploadSize:Int = 0;
+	var pendingUploadToken:String = "";
+	var pendingUploadPort:Int = 0;
+	var pendingUploadUri:String = "";
+
 	var songNames:Array<String> = [];
 	var songCursor:Int = 0;
 	var pendingSong:String = "";
@@ -277,7 +295,20 @@ class NetMenuState extends MusicBeatState
 			b += "状态: " + status + "\n\n";
 			b += "房间 #" + NovaNet.roomId + "   歌曲: " + NovaNet.roomSong
 				+ "   难度: " + NovaNet.roomDiff + "   房主: " + NovaNet.roomHost + "\n";
-			b += "房间码: " + (NovaNet.roomCode.length > 0 ? NovaNet.roomCode : "-") + "   (把房间码告诉队友即可直接进房)\n\n";
+			b += "房间码: " + (NovaNet.roomCode.length > 0 ? NovaNet.roomCode : "-")
+				+ "   (把房间码告诉队友即可直接进房)\n";
+			if (modName.length > 0)
+			{
+				var mst:String = switch (modState)
+				{
+					case 3: "已安装";
+					case 2: "传输中 " + Math.round(modProgress * 100) + "%";
+					case 1: modReady ? "可下载（点[下载模组]）" : "房主上传中...";
+					default: "";
+				}
+				b += "模组: " + modName + "  " + mst + "\n";
+			}
+			b += "\n";
 
 			if (tabMode == 0)
 			{
@@ -300,9 +331,21 @@ class NetMenuState extends MusicBeatState
 				b += "\n(在下方输入框打字，回车发送)\n";
 			}
 			hintTxt.text = "点按钮操作  |  数字1=开始  |  ESC=回选歌";
+			var b5:String = "排行榜";
+			var f5:Void->Void = function() { doChoice(5); };
+			if (modState == 1)
+			{
+				b5 = modReady ? "下载模组" : "模组上传中";
+				f5 = startModDownload;
+			}
+			else if (modState == 2)
+			{
+				b5 = "传输中";
+				f5 = function() {};
+			}
 			setBtns(
-				["信息", "聊天", "开始", "观战/上场", "排行榜", "离开"],
-				[tabInfo, tabChat, function() { doChoice(3); }, function() { doChoice(4); }, function() { doChoice(5); }, function() { doChoice(6); }]
+				["信息", "聊天", "开始", "观战/上场", b5, "离开"],
+				[tabInfo, tabChat, function() { doChoice(3); }, function() { doChoice(4); }, f5, function() { doChoice(6); }]
 			);
 		}
 		else
@@ -380,7 +423,47 @@ class NetMenuState extends MusicBeatState
 			{
 				status = NovaNet.isSpectator() ? "观战中" : "in room";
 				setPage(PAGE_ROOM);
+				maybePublishHostMod();
 				return;
+			}
+			else if (t == "MODAVAIL")
+			{
+				modToken = NovaNet.field(m, "token");
+				modName = NovaNet.field(m, "name");
+				modSha = NovaNet.field(m, "sha");
+				var sz:Null<Int> = Std.parseInt(NovaNet.field(m, "size"));
+				modSize = (sz == null) ? 0 : sz;
+				var pt:Null<Int> = Std.parseInt(NovaNet.field(m, "port"));
+				modPort = (pt == null) ? 27315 : pt;
+				modUri = "/mod/" + modToken;
+				modReady = NovaNet.field(m, "ready", "0") == "1";
+				if (modState != 3)
+					modState = 1;
+				status = "房主分发了模组: " + modName + " (" + ModTransfer.fmtMB(modSize)
+					+ ")  点[下载模组]安装（注意：模组内含脚本，确认信任对方再装）";
+				chatLines.push("[系统] 有模组可下载: " + modName + " (" + ModTransfer.fmtMB(modSize) + ")");
+				if (chatLines.length > 8) chatLines.shift();
+				redraw();
+			}
+			else if (t == "MODREADY")
+			{
+				modReady = true;
+				if (modState == 1)
+					status = "模组 " + modName + " 已就绪，点[下载模组]安装";
+				redraw();
+			}
+			else if (t == "MODCLEAR")
+			{
+				chatLines.push("[系统] " + NovaNet.field(m, "name") + " 模组分发完成");
+				if (chatLines.length > 8) chatLines.shift();
+			}
+			else if (t == "MODTOKEN")
+			{
+				pendingUploadToken = NovaNet.field(m, "token");
+				var pt2:Null<Int> = Std.parseInt(NovaNet.field(m, "port"));
+				pendingUploadPort = (pt2 == null) ? 27315 : pt2;
+				pendingUploadUri = NovaNet.field(m, "uri", "/mod/" + pendingUploadToken);
+				startHostUpload();
 			}
 			else if (t == "KICK")
 			{
@@ -442,6 +525,144 @@ class NetMenuState extends MusicBeatState
 			}
 		}
 		if (msgs.length > 0) redraw();
+	}
+
+	// ------------------------------------------------------------ 模组分发
+	/** 房主进房后自动检查：这首歌是不是来自 mod，是就打包并发布 */
+	function maybePublishHostMod():Void
+	{
+		if (!NovaNet.connected || !NovaNet.inRoom || !NovaNet.isHost())
+			return;
+		if (modBusy || NovaNet.roomMod.length > 0)
+			return;
+		#if sys
+		sys.thread.Thread.create(publishHostModThread);
+		#end
+	}
+
+	function publishHostModThread():Void
+	{
+		try
+		{
+			var song:String = NovaNet.roomSong;
+			if (song.length == 0)
+				return;
+			var dir:String = ModTransfer.findModForSong(song);
+			if (dir.length == 0)
+				return;                      // 官方本体，不需要分发
+			modBusy = true;
+			modName = dir;
+			status = "正在打包模组 " + dir + " ...";
+			var tmp:String = ModTransfer.tempPath();
+			var r = ModTransfer.packMod(dir, tmp);
+			if (r == null)
+			{
+				modBusy = false;
+				return;
+			}
+			pendingUploadPath = tmp;
+			pendingUploadSize = r.size;
+			NovaNet.modPub(dir, r.size, r.sha);
+		}
+		catch (e:Dynamic)
+		{
+			status = "模组打包出错: " + e;
+			modBusy = false;
+		}
+	}
+
+	function startHostUpload():Void
+	{
+		if (pendingUploadPath.length == 0 || modBusy)
+			return;
+		var path:String = pendingUploadPath;
+		var size:Int = pendingUploadSize;
+		var h:String = hostIP;
+		var port:Int = pendingUploadPort;
+		var uri:String = pendingUploadUri;
+		modBusy = true;
+		modState = 2;
+		modProgress = 0;
+		status = "正在上传模组给服务器...";
+		#if sys
+		sys.thread.Thread.create(function()
+		{
+			try
+			{
+				var okUp:Bool = ModTransfer.uploadMod(h, port, uri, path, size, function(p) { modProgress = p; });
+				ModTransfer.deleteFile(path);
+				modBusy = false;
+				status = okUp ? "模组上传完成，等房内成员下载" : "模组上传失败";
+			}
+			catch (e:Dynamic)
+			{
+				modBusy = false;
+				status = "模组上传出错: " + e;
+			}
+		});
+		#end
+	}
+
+	function startModDownload():Void
+	{
+		if (modBusy)
+			return;
+		if (!modReady)
+		{
+			status = "房主还在上传模组，稍等一下";
+			redraw();
+			return;
+		}
+		if (modToken.length == 0 || modName.length == 0)
+			return;
+		modBusy = true;
+		modState = 2;
+		modProgress = 0;
+		status = "正在下载模组 " + modName + " ...";
+		var h:String = hostIP;
+		var port:Int = modPort;
+		var uri:String = modUri;
+		var token:String = modToken;
+		var name:String = modName;
+		var size:Int = modSize;
+		#if sys
+		sys.thread.Thread.create(function()
+		{
+			try
+			{
+				var tmp:String = ModTransfer.tempPath();
+				var okDl:Bool = ModTransfer.downloadMod(h, port, uri, tmp, size, function(p) { modProgress = p; });
+				if (!okDl)
+				{
+					ModTransfer.deleteFile(tmp);
+					modBusy = false;
+					modState = 1;
+					status = "模组下载失败，请重试";
+					return;
+				}
+				if (!ModTransfer.validateContainer(tmp))
+				{
+					ModTransfer.deleteFile(tmp);
+					modBusy = false;
+					modState = 1;
+					status = "模组包校验失败，已丢弃";
+					return;
+				}
+				var okUp:Bool = ModTransfer.unpackMod(tmp, name);
+				ModTransfer.deleteFile(tmp);
+				NovaNet.modDone(token, okUp);
+				modBusy = false;
+				modState = okUp ? 3 : 1;
+				status = okUp ? "模组 " + name + " 安装完成" : "模组安装失败";
+			}
+			catch (e:Dynamic)
+			{
+				modBusy = false;
+				modState = 1;
+				status = "模组下载出错: " + e;
+			}
+		});
+		#end
 	}
 
 	function netStartSong():Void
@@ -743,6 +964,7 @@ class NetMenuState extends MusicBeatState
 			else if (FlxG.keys.justPressed.FOUR) doChoice(4);
 			else if (FlxG.keys.justPressed.FIVE) doChoice(5);
 			else if (FlxG.keys.justPressed.SIX) doChoice(6);
+			else if (FlxG.keys.justPressed.SEVEN && page == PAGE_ROOM) startModDownload();
 		}
 		else
 		{
@@ -752,6 +974,16 @@ class NetMenuState extends MusicBeatState
 			else if (FlxG.keys.justPressed.FOUR) doChoice(4);
 			else if (FlxG.keys.justPressed.FIVE) doChoice(5);
 			else if (FlxG.keys.justPressed.SIX) doChoice(6);
+		}
+
+		if (page == PAGE_ROOM && modBusy)
+		{
+			redrawTick += elapsed;
+			if (redrawTick > 0.4)
+			{
+				redrawTick = 0;
+				redraw();
+			}
 		}
 
 		if (FlxG.keys.justPressed.ENTER)
