@@ -76,6 +76,9 @@ class NetMenuState extends MusicBeatState
 	var pendingUploadPort:Int = 0;
 	var pendingUploadUri:String = "";
 
+	// ---- 断线自动重连
+	var reconnWatch:Bool = false;  // 已发起自动重连，等结果
+
 	var songNames:Array<String> = [];
 	var songCursor:Int = 0;
 	var pendingSong:String = "";
@@ -456,6 +459,14 @@ class NetMenuState extends MusicBeatState
 			else if (t == "MODCLEAR")
 			{
 				chatLines.push("[系统] " + NovaNet.field(m, "name") + " 模组分发完成");
+				if (chatLines.length > 8) chatLines.shift();
+			}
+			else if (t == "DISCONNECT")
+			{
+				// 队友掉线：席位保留 grace 秒，期内回来会自动归位
+				var du:String = NovaNet.field(m, "u", "");
+				var dg:String = NovaNet.field(m, "grace", "120");
+				chatLines.push("[系统] " + du + " 掉线了，" + dg + " 秒内重连可自动归位");
 				if (chatLines.length > 8) chatLines.shift();
 			}
 			else if (t == "MODTOKEN")
@@ -919,6 +930,54 @@ class NetMenuState extends MusicBeatState
 		super.update(elapsed);
 		pump();
 
+		// ---- 断线自动重连：房间内 TCP 掉了 → 后台重连 + token 归位，玩家留在房间页
+		if (NovaNet.inRoom && !NovaNet.connected && !NovaNet.reconnecting && !reconnWatch)
+		{
+			reconnWatch = NovaNet.startReconnect();
+			if (reconnWatch)
+			{
+				chatLines.push("[系统] 与服务器断开，正在自动重连（最多 " + NovaNet.reconnectMax + " 次）...");
+				if (chatLines.length > 8) chatLines.shift();
+			}
+		}
+		if (NovaNet.reconnecting)
+		{
+			var rst:String = "连接断开，正在重连... (" + NovaNet.reconnectTry + "/" + NovaNet.reconnectMax + ")";
+			if (status != rst)
+			{
+				status = rst;
+				redraw();
+			}
+		}
+		else if (reconnWatch)
+		{
+			reconnWatch = false;
+			var rr:Int = NovaNet.reconnectResult;
+			if (rr == 1)
+			{
+				status = "已重连，房间状态已恢复";
+				chatLines.push("[系统] 重连成功，已回到房间");
+				if (chatLines.length > 8) chatLines.shift();
+			}
+			else if (rr == 2)
+			{
+				status = "未能回到房间（重连宽限期已过或房间已解散）";
+				chatLines.push("[系统] 没能回到房间，回到选歌页");
+				if (chatLines.length > 8) chatLines.shift();
+				NovaNet.disconnect();
+				setPage(PAGE_SONGS);
+			}
+			else
+			{
+				status = "重连失败，已断开";
+				chatLines.push("[系统] 重连失败，请回连接页重试");
+				if (chatLines.length > 8) chatLines.shift();
+				NovaNet.disconnect();
+				setPage(PAGE_CONNECT);
+			}
+			redraw();
+		}
+
 		if (FlxG.keys.justPressed.ESCAPE)
 		{
 			if (page == PAGE_LB)
@@ -927,6 +986,7 @@ class NetMenuState extends MusicBeatState
 			}
 			else if (page == PAGE_ROOM)
 			{
+				reconnWatch = false;       // 手动离开就不要再等重连结果了
 				NovaNet.leaveRoom();
 				chatLines = [];
 				setPage(PAGE_SONGS);
