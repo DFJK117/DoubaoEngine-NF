@@ -75,6 +75,19 @@ class NovaNet
 	static var lb:Array<String> = [];          // 最近一次排行榜结果
 	static var lastPingSent:Float = 0;
 
+	// ---- 断线自动重连
+	/** 重连尝试上限 */
+	public static var reconnectMax:Int = 8;
+	/** 0=进行中/未开始 1=成功回房 2=房间没了(宽限期已过/已解散) 3=彻底失败 */
+	public static var reconnectResult(default, null):Int = 0;
+	public static var reconnecting(default, null):Bool = false;
+	public static var reconnectTry(default, null):Int = 0;
+	/** 最近一次成功 connect 的地址，重连时复用 */
+	public static var lastHost:String = "";
+	public static var lastPort:Int = 27310;
+	static var readerGen:Int = 0;      // reader 代数：旧 reader 线程发现换代就自行退出
+	static var reconnectGen:Int = 0;   // 重连代数：手动断开会作废进行中的重连
+
 	// ------------------------------------------------------------ 连接
 	public static function connect(host:String, port:Int = 27310):Bool
 	{
@@ -82,13 +95,35 @@ class NovaNet
 		return false;
 		#end
 		disconnect();
+		if (rawConnect(host, port))
+		{
+			lastHost = host;
+			lastPort = port;
+			return true;
+		}
+		return false;
+	}
+
+	/** 建立新 TCP 并换掉旧 socket（不动 inRoom 等房间状态，供重连复用）。 */
+	static function rawConnect(host:String, port:Int):Bool
+	{
+		#if !sys
+		return false;
+		#end
 		try
 		{
-			sock = new Socket();
-			sock.setFastSend(true);            // TCP_NODELAY
-			sock.connect(new Host(host), port);
+			var s:Socket = new Socket();
+			s.setFastSend(true);               // TCP_NODELAY
+			s.connect(new Host(host), port);
+			if (sock != null)
+			{
+				try { sock.close(); } catch (e:Dynamic) {}
+			}
+			readerGen++;
+			var gen:Int = readerGen;
+			sock = s;
 			connected = true;
-			Thread.create(readerLoop);
+			Thread.create(function():Void { readerLoop(s, gen); });
 			return true;
 		}
 		catch (e:Dynamic)
@@ -104,6 +139,11 @@ class NovaNet
 		connected = false;
 		inRoom = false;
 		roomId = -1;
+		readerGen++;               // 作废所有旧 reader
+		reconnectGen++;            // 作废进行中的重连
+		reconnecting = false;
+		reconnectTry = 0;
+		reconnectResult = 0;
 		try
 		{
 			if (sock != null)
@@ -113,10 +153,9 @@ class NovaNet
 		sock = null;
 	}
 
-	static function readerLoop():Void
+	static function readerLoop(s:Socket, gen:Int):Void
 	{
-		var s:Socket = sock;
-		while (connected)
+		while (connected && readerGen == gen)
 		{
 			var line:String = null;
 			try
@@ -133,13 +172,19 @@ class NovaNet
 			inbound.push(StringTools.trim(line));
 			mtx.release();
 		}
-		connected = false;
+		if (readerGen == gen)      // 只有自己的代数失效才宣布断线
+			connected = false;
 	}
 
-	/** 每帧调用一次，取出服务器推来的消息。 */
+	/** 每帧调用一次，取出服务器推来的消息。重连期间由重连线程消费，暂停下发。 */
 	public static function poll():Array<String>
 	{
 		mtx.acquire();
+		if (reconnecting)
+		{
+			mtx.release();
+			return [];
+		}
 		var out:Array<String> = inbound.copy();
 		inbound = [];
 		mtx.release();
@@ -159,6 +204,118 @@ class NovaNet
 		{
 			connected = false;
 		}
+	}
+
+	// ------------------------------------------------------------ 断线自动重连
+	/**
+	 * 掉线后在房间内调用：后台线程自动重连并用 token 恢复登录，再发 REJOIN 归位。
+	 * 结果写 reconnectResult：1=成功回房 2=房间没了 3=彻底失败/token 失效。
+	 */
+	public static function startReconnect():Bool
+	{
+		#if sys
+		if (reconnecting || token.length == 0 || lastHost.length == 0 || !inRoom)
+			return false;
+		reconnecting = true;
+		reconnectResult = 0;
+		reconnectTry = 0;
+		reconnectGen++;
+		var gen:Int = reconnectGen;
+		Thread.create(function():Void { reconnectWorker(gen); });
+		return true;
+		#else
+		return false;
+		#end
+	}
+
+	static function reconnectWorker(gen:Int):Void
+	{
+		while (reconnectGen == gen && reconnectTry < reconnectMax)
+		{
+			reconnectTry++;
+			if (!rawConnect(lastHost, lastPort))
+			{
+				Sys.sleep(2.0);
+				continue;
+			}
+			if (reconnectGen != gen)
+				return;
+			// 1) 等握手
+			if (waitLine(["HELLO"], 4.0).length == 0)
+			{
+				Sys.sleep(1.0);
+				continue;
+			}
+			// 2) token 恢复登录
+			loginWithToken(token);
+			var lk:String = waitLine(["LOGINOK", "ERR"], 4.0);
+			if (typeOf(lk) != "LOGINOK")
+			{
+				reconnectResult = 3;       // token 失效，重试无意义
+				break;
+			}
+			if (reconnectGen != gen)
+				return;
+			// 3) REJOIN 归位（服务器会补发成员 PEER / MODAVAIL / 窗口内的 START）
+			raw('REJOIN|k=$token');
+			var rk:String = waitLine(["JOINOK", "ERR"], 5.0);
+			var rt:String = typeOf(rk);
+			if (rt == "JOINOK")
+			{
+				apply(rk);                 // 恢复房间号/席位/成员表
+				reconnectResult = 1;
+				break;
+			}
+			if (rt == "ERR" && field(rk, "c") == "NO_ROOM")
+			{
+				reconnectResult = 2;       // 宽限期已过或房间已解散
+				break;
+			}
+			Sys.sleep(2.0);                // 其他错误（网络抖动）再试
+		}
+		if (reconnectGen != gen)
+			return;                        // 已被手动 disconnect() 作废
+		if (reconnectResult == 0)
+			reconnectResult = 3;
+		reconnecting = false;
+	}
+
+	/** 在 inbound 里等一条指定类型的消息（其余消息原样保留给 UI）。超时返回 ""。 */
+	static function waitLine(want:Array<String>, timeoutSec:Float):String
+	{
+		var deadline:Float = Sys.time() + timeoutSec;
+		while (Sys.time() < deadline)
+		{
+			var hit:String = "";
+			var took:Bool = false;
+			var keep:Array<String> = [];
+			mtx.acquire();
+			for (l in inbound)
+			{
+				if (!took)
+				{
+					var lt:String = typeOf(l);
+					for (w in want)
+					{
+						if (w == lt)
+						{
+							hit = l;
+							took = true;
+							break;
+						}
+					}
+					if (took)
+						continue;
+				}
+				keep.push(l);
+			}
+			inbound = keep;
+			mtx.release();
+			if (hit.length > 0)
+				return hit;
+			Sys.sleep(0.05);
+		}
+		return "";
 	}
 
 	// ------------------------------------------------------------ 发包
