@@ -345,7 +345,7 @@ class FreeplayState extends MusicBeatState
 		speedData.camera = camAfter;
 		add(speedData);
 
-		keyCountData = new DataDis(speedData.x + speedData.lineDis.width * 1.2, detailRect.bg3.y + 8, 120, 5, 'Key count', 0, 9, 0);
+		keyCountData = new DataDis(speedData.x + speedData.lineDis.width * 1.2, detailRect.bg3.y + 8, 120, 5, 'Key count', 0, 17, 0);
 		keyCountData.camera = camAfter;
 		keyCountData.allowTweenDecimal = keyCountData.allowDecimal = false;
 		add(keyCountData);
@@ -594,12 +594,6 @@ class FreeplayState extends MusicBeatState
 	public var allowUpdate:Bool = false;
 	override function update(elapsed:Float)
 	{
-		if (FlxG.keys.justPressed.N)
-		{
-			MusicBeatState.switchState(new states.netMenuState.NetMenuState());
-			return;
-		}
-
 		if (FlxG.sound.music != null)
 			Conductor.songPosition = FlxG.sound.music.time;
 
@@ -1080,8 +1074,6 @@ class FreeplayState extends MusicBeatState
 		++audioSwitchId;
 	}
 
-	public static var netplayMode:Bool = false;
-
 	public function startGame() {
 		if (curDifficulty >= 0 && curDifficulty < Difficulty.list.length) {
 			var songLowercase:String = Paths.formatToSongPath(songsData[curSelected].songName);
@@ -1105,16 +1097,6 @@ class FreeplayState extends MusicBeatState
 
 				trace(errorStr);
 				FlxG.sound.play(Paths.sound('cancelMenu'));
-				return;
-			}
-
-			// 联机模式：不去打单人，改去联机页加入/创建这首歌的房间
-			if (netplayMode)
-			{
-				netplayMode = false;
-				states.netMenuState.NetMenuState.nextSong = songLowercase;
-				states.netMenuState.NetMenuState.nextDiff = Paths.formatToSongPath(Difficulty.list[curDifficulty]);
-				MusicBeatState.switchState(new states.netMenuState.NetMenuState());
 				return;
 			}
 
