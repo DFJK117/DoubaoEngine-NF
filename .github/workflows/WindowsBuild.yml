@@ -27,10 +27,19 @@ jobs:
         run: ./tools/restore-private-gameanalytics.ps1 -Required
 
       - name: Install Libraries
+        shell: pwsh
         run: |
           haxelib setup C:\haxelib
           haxelib install hmm --quiet
-          haxelib run hmm install
+          $ok = $false
+          for ($i=1; $i -le 4 -and -not $ok; $i++) {
+            Remove-Item -Recurse -Force C:\haxelib\flixel -ErrorAction SilentlyContinue
+            Remove-Item -Recurse -Force .haxelib\flixel -ErrorAction SilentlyContinue
+            haxelib run hmm install
+            if ($LASTEXITCODE -eq 0) { $ok = $true }
+            else { Write-Host ("hmm install attempt " + $i + " failed, retrying..."); Start-Sleep -Seconds 5 }
+          }
+          if (-not $ok) { Write-Error "hmm install failed after 4 attempts"; exit 1 }
 
       - name: Extract current version
         id: get_version
