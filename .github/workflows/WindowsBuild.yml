@@ -27,9 +27,7 @@ jobs:
         run: ./tools/restore-private-gameanalytics.ps1 -Required
 
       - name: Install Libraries
-        shell: pwsh
         run: |
-          Add-MpPreference -ExclusionPath "D:\a" -ErrorAction SilentlyContinue
           haxelib setup C:\haxelib
           haxelib install hmm --quiet
           haxelib run hmm install
