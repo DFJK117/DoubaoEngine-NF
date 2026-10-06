@@ -44,6 +44,10 @@ class GamePlayGroup extends OptionCata
         var option:Option = new Option(this, 'playOpponent', BOOL);
         addOption(option);
         
+        // 本地双人（斗曲模式）：P2 用自己的一套键打对手侧谱面
+        var option:Option = new Option(this, 'localMultiplayer', BOOL);
+        addOption(option);
+        
         var option:Option = new Option(this, 'opponentCodeFix', BOOL);
         addOption(option);
         
