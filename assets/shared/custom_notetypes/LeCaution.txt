@@ -1,0 +1,2 @@
+texture='noteSkins/NOTE_assets-lecaution'
+lowPriority=true
