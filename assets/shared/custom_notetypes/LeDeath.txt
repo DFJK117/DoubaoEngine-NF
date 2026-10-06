@@ -1,0 +1,4 @@
+texture='noteSkins/NOTE_assets-ledeath'
+hitCausesMiss=true
+missHealth=0.35
+lowPriority=true
