@@ -2,3 +2,4 @@ Future
 Chip
 Classic
 Stepmania
+LE
