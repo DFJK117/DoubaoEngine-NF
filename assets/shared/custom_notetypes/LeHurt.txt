@@ -1,0 +1,4 @@
+texture='noteSkins/NOTE_assets-lehurt'
+hitCausesMiss=true
+missHealth=0.1
+lowPriority=true
