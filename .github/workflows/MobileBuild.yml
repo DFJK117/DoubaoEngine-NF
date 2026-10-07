@@ -132,7 +132,21 @@ jobs:
           cd "$D"
           echo "--- before ---"; git log --oneline -1 || true
           git fetch --all --tags --force
-          git checkout -f nf-1.2.2
+          # nf-1.2.2 这个 ref 有可能在 fork 仓库里并不存在（分支被删除 / 从未推送），
+          # 此时原来的写法会直接失败并让整条 Android 构建挂掉。这里改成：
+          # 找得到就 checkout，找不到就回退到 fork 的默认分支，
+          # 最终以下面的 renderScale / pixelDensity 断言来兜底 —— 只要这两个
+          # NovaFlare 定制字段还在，编译出来的东西就是对的。
+          if git ls-remote --heads origin nf-1.2.2 | grep -q 'nf-1.2.2'; then
+            echo "checkout pinned branch nf-1.2.2"
+            git checkout -f nf-1.2.2
+          elif git ls-remote --tags origin nf-1.2.2 | grep -q 'nf-1.2.2'; then
+            echo "checkout pinned tag nf-1.2.2"
+            git checkout -f refs/tags/nf-1.2.2
+          else
+            echo "!! ref nf-1.2.2 not found on $(git remote get-url origin), fall back to default branch"
+            git checkout -f main || git checkout -f origin/main || git checkout -f refs/remotes/origin/HEAD
+          fi
           echo "--- after ---"; git log --oneline -1
           echo "renderScale occurrences: $(grep -c 'renderScale' flixel/text/FlxText.hx)"
           echo "pixelDensity occurrences: $(grep -c 'pixelDensity' flixel/FlxSprite.hx)"

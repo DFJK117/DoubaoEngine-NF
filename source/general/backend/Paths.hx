@@ -865,7 +865,10 @@ class Paths
 			{
 				var alt:String = root + key;
 				if (FileSystem.exists(alt))
-					return alt;
+				{
+					result = alt;
+					break;
+				}
 			}
 		}
 		if (DeepDebugTracker.active && key.length > 0 && FileSystem.exists(result))
