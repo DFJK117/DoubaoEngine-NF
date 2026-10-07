@@ -1,0 +1,3 @@
+Customize => Customize
+customHitsoundHint => Drop .ogg hitsounds into any mod's sounds/hitsounds/ folder (or the game's assets/shared/sounds/hitsounds/), then restart — they appear under Audio → Hit Sound.
+customNoteForm => Global custom Note form

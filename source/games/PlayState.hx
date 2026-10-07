@@ -1972,7 +1972,12 @@ class PlayState extends MusicBeatState
 						swagNote.noteType = '';
 				}
 
-				// 自定义单个 Note 形式：谱面可以在第 5 / 6 个字段给单个音符指定
+				// 全局自定义 Note 形态：谱面未单独指定形态（noteType 为空）时，套用设置里的 customNoteForm
+			//   谱面自带具体形态（如 'GF Sing'、'alt-animation' 等）不受影响，仍优先
+			if (swagNote.noteType == '' && ClientPrefs.data.customNoteForm != 'None' && ClientPrefs.data.customNoteForm != '')
+				swagNote.noteType = ClientPrefs.data.customNoteForm;
+
+			// 自定义单个 Note 形式：谱面可以在第 5 / 6 个字段给单个音符指定
 				// 自己的贴图（noteSkin）与打击特效贴图（noteSplash）。
 				// 不写这两个字段的老谱面完全不受影响。
 				if (songNotes.length > 4)

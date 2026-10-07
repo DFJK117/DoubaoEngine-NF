@@ -171,7 +171,7 @@ class OptionsState extends MusicBeatState
 
 	/** 一级分类顺序（语言已移出，见侧边栏 CN / EN） */
 	public static var CATA_NAMES:Array<String> = [
-		'General', 'User Interface', 'GamePlay', 'Game UI', 'Skin', 'Input', 'Audio', 'Graphics', 'Maintenance'
+		'General', 'User Interface', 'GamePlay', 'Game UI', 'Skin', 'Input', 'Audio', 'Graphics', 'Maintenance', 'Customize'
 	];
 
 	///////////////////////////////////////////////////////////////////////////////
@@ -2147,6 +2147,7 @@ class OptionsState extends MusicBeatState
 			case 'Audio': obj = new AudioGroup(cx, cy, cw, chh);
 			case 'Graphics': obj = new GraphicsGroup(cx, cy, cw, chh);
 			case 'Maintenance': obj = new MaintenanceGroup(cx, cy, cw, chh);
+			case 'Customize': obj = new CustomGroup(cx, cy, cw, chh);
 			default: obj = new HScriptGroup(cx, cy, cw, chh, type, extraPath, type);
 		}
 		cataGroup.push(obj);

@@ -132,6 +132,10 @@ import general.shaders.MobileShaderConverter;
 	public var showSplash:Bool = true;
 	public var splashAlpha:Float = 0.6;
 
+	// Customize（自定义分类）
+	// 全局自定义 Note 形态：选 'None' 则沿用谱面自带形态；否则谱面未单独指定形态的音符套用它
+	public var customNoteForm:String = 'None';
+
 	// Input
 	// Moblie Input Backend s
 	public var dynamicColors:Bool = true;
@@ -266,6 +270,29 @@ class ClientPrefs
 		'note_down' => [S, DOWN],
 		'note_up' => [K, UP],
 		'note_right' => [L, RIGHT],
+
+		// ===== 玩家 2（本地双人 / 对手侧）默认键位：用小键盘，避免与 P1 的 A/S/D/K/L/方向键 冲突 =====
+		// 键名 p2_key_N 与 PlayState.keysArrayP2 一一对应（PlayState.hx 按当前 mania 动态生成）
+		'p2_key_0' => [NUMPADONE],
+		'p2_key_1' => [NUMPADTWO],
+		'p2_key_2' => [NUMPADTHREE],
+		'p2_key_3' => [NUMPADFOUR],
+		'p2_key_4' => [NUMPADFIVE],
+		'p2_key_5' => [NUMPADSIX],
+		'p2_key_6' => [NUMPADSEVEN],
+		'p2_key_7' => [NUMPADEIGHT],
+		'p2_key_8' => [NUMPADZERO],
+		'p2_key_9' => [NUMPADMINUS],
+		'p2_key_10' => [NUMPADPLUS],
+		'p2_key_11' => [R],
+		'p2_key_12' => [T],
+		'p2_key_13' => [Y],
+		'p2_key_14' => [U],
+		'p2_key_15' => [I],
+		'p2_key_16' => [O],
+		'p2_key_17' => [P],
+		'p2_key_18' => [Q],
+		'p2_key_19' => [B],
 
 		'0_key_0' => [SPACE],
 

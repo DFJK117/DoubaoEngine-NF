@@ -1,0 +1,3 @@
+Customize => 自定义设置
+customHitsoundHint => 把 .ogg 打击音效放进任意模组的 sounds/hitsounds/ 文件夹（或游戏 assets/shared/sounds/hitsounds/），重启后即在「音频 → 打击音效」里出现。
+customNoteForm => 全局自定义 Note 形态

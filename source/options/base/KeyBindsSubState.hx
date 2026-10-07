@@ -23,6 +23,7 @@ class KeyBindsSubState extends MusicBeatSubstate
 		{name: '10k',      first: 45, len: 10},
 		{name: 'UI',       first: 55, len: 4},
 		{name: 'Misc',     first: 59, len: 5},
+		{name: 'P2',       first: 64, len: 10},
 	];
 
 	// Category-specific highlight colors for keyboard — each note mode gets its own color
@@ -39,6 +40,7 @@ class KeyBindsSubState extends MusicBeatSubstate
 		0xFFFFCC66,  // 10k     - gold
 		0xFF66FFCC,  // UI      - teal
 		0xFFFF6688,  // Misc    - coral
+		0xFFCC99FF,  // P2      - lavender
 	];
 
 	// Fallback category name translations (when Language.get fails)
@@ -46,7 +48,7 @@ class KeyBindsSubState extends MusicBeatSubstate
 		'1K' => '1K', '2K' => '2K', '3K' => '3K',
 		'4K' => '4K', '5K' => '5K', '6k' => '6K',
 		'7k' => '7K', '8k' => '8K', '9k' => '9K',
-		'10k' => '10K', 'UI' => '界面', 'Misc' => '其他',
+		'10k' => '10K', 'UI' => '界面', 'Misc' => '其他', 'P2' => '玩家2',
 	];
 
 	static function isChinese():Bool
@@ -145,6 +147,17 @@ class KeyBindsSubState extends MusicBeatSubstate
 		{name: 'Back',          key: 'back'},
 		{name: 'Pause',         key: 'pause'},
 		{name: 'Fullscreen',    key: 'fullscreen'},
+		// P2（本地双人 / 对手侧）—— 键名与 ClientPrefs.keyBinds 的 p2_key_N 对应
+		{name: 'P2 轨道 1',  key: 'p2_key_0'},
+		{name: 'P2 轨道 2',  key: 'p2_key_1'},
+		{name: 'P2 轨道 3',  key: 'p2_key_2'},
+		{name: 'P2 轨道 4',  key: 'p2_key_3'},
+		{name: 'P2 轨道 5',  key: 'p2_key_4'},
+		{name: 'P2 轨道 6',  key: 'p2_key_5'},
+		{name: 'P2 轨道 7',  key: 'p2_key_6'},
+		{name: 'P2 轨道 8',  key: 'p2_key_7'},
+		{name: 'P2 轨道 9',  key: 'p2_key_8'},
+		{name: 'P2 轨道 10', key: 'p2_key_9'},
 	];
 
 	// Visual keyboard layout (non-interactive, just for reference)
@@ -229,6 +242,7 @@ class KeyBindsSubState extends MusicBeatSubstate
 				case '10k': displayCatName = tr('key_10k', 'controls', '10K', '10K');
 				case 'UI': displayCatName = tr('ui', 'controls', '界面', 'UI');
 				case 'Misc': displayCatName = tr('misc', 'controls', '其他', 'Misc');
+				case 'P2': displayCatName = tr('key_p2', 'controls', '玩家2', 'P2');
 				default: displayCatName = cat.name;
 			}
 			var t = new FlxText(0, catStartY, 0, '[' + displayCatName + ']', 18);
