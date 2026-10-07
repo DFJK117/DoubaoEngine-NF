@@ -2203,26 +2203,7 @@ class ClientPrefs
 		'volume_down' => [NUMPADMINUS, MINUS],
 		'debug_1' => [SEVEN],
 		'debug_2' => [EIGHT],
-		'fullscreen' => [F11],
-
-		// 本地双人模式：玩家 2 的独立按键组（默认小键盘 1-9 / 0 / . / + / - / * / /）
-		// 这里用 FlxKey 的原始整数值书写（97..105 = 小键盘 1..9，96 = 小键盘 0），
-		// 避免依赖不同 flixel 版本里可能不一致的 NUMPAD* 常量名。
-		'p2_key_0' => [97],
-		'p2_key_1' => [98],
-		'p2_key_2' => [99],
-		'p2_key_3' => [100],
-		'p2_key_4' => [101],
-		'p2_key_5' => [102],
-		'p2_key_6' => [103],
-		'p2_key_7' => [104],
-		'p2_key_8' => [105],
-		'p2_key_9' => [96],
-		'p2_key_10' => [110],
-		'p2_key_11' => [107],
-		'p2_key_12' => [109],
-		'p2_key_13' => [106],
-		'p2_key_14' => [111]
+		'fullscreen' => [F11]
 	];
 	public static var defaultMobileBinds:Map<String, Array<FlxKey>> = null;
 	public static var defaultKeys:Map<String, Array<FlxKey>> = null;
