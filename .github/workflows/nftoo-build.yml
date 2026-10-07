@@ -1,4 +1,4 @@
-name: Doubao Engine Windows Build
+name: NFtoo Windows Build
 
 on:
   push:
@@ -40,7 +40,7 @@ jobs:
         run: |
           $bin = "export\legacy-gc\windows\bin"
           if (Test-Path $bin) {
-            Compress-Archive -Path "$bin\*" -DestinationPath DoubaoEngine-Windows.zip -Force
+            Compress-Archive -Path "$bin\*" -DestinationPath NFtoo-Windows.zip -Force
           } else {
             Write-Output "bin dir not found, listing export:"
             Get-ChildItem export -Recurse -Directory | Select-Object FullName
@@ -50,12 +50,12 @@ jobs:
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: DoubaoEngine-Windows
-          path: DoubaoEngine-Windows.zip
+          name: NFtoo-Windows
+          path: NFtoo-Windows.zip
 
       - name: Release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: doubao-windows
-          name: Doubao Engine Windows
-          files: DoubaoEngine-Windows.zip
+          tag_name: nftoo-windows
+          name: NFtoo Windows
+          files: NFtoo-Windows.zip

@@ -118,7 +118,7 @@ jobs:
             echo "使用缓存，无需安装依赖"
           fi
 
-      # ★ Doubao: hmm 对已存在的 git 库走 `git pull` 更新，会把 flixel 留在默认分支(main)，
+      # ★ NFtoo: hmm 对已存在的 git 库走 `git pull` 更新，会把 flixel 留在默认分支(main)，
       #    而 main 上没有 NovaFlare 加的 FlxText.renderScale / FlxSprite.pixelDensity，
       #    Android 编译 InitState.hx / ConfirmationPopupSubstate.hx 时直接报 undefined field。
       #    这里在编译前强制 checkout 到 hmm.json 里指定的 nf-1.2.2 tag，并断言字段存在。
@@ -190,7 +190,7 @@ jobs:
       - name: Upload Android Artifact
         uses: actions/upload-artifact@main
         with:
-          name: androidBuild
+          name: NFtoo-Android
           path: export/legacy-gc/android/bin/app/build/outputs/apk/release/android.zip
           if-no-files-found: error
 
