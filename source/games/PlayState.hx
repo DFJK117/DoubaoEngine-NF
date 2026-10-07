@@ -274,7 +274,21 @@ class PlayState extends MusicBeatState
 	public var cpuControlled:Bool = false;
 	public var cpuControlled_opponent:Bool = false;
 	public var practiceMode:Bool = false;
-	
+
+	/**
+	 * 本地双人模式：
+	 * - 游玩中按数字键 2 → 立刻用双人模式重开当前曲目。
+	 * - pending 只在按下那一刻为 true，被新的 PlayState 消费后立即复位，
+	 *   所以「暂停 → 重开曲目」会自然回到单人模式，不会一直卡在双人里。
+	 * - 开启后对手不再是 CPU，改由玩家 2 用第二套按键（默认小键盘）打对手谱面。
+	 */
+	public static var pendingTwoPlayer:Bool = false;
+	public var twoPlayerLocal:Bool = false;
+	/** 玩家 2 的按键 id 列表（p2_key_0…），与 keysArray 一一对应 */
+	public var keysArrayP2:Array<String> = [];
+	var _holdP2:Array<Bool> = [];
+	var _pressP2:Array<Bool> = [];
+	var _releaseP2:Array<Bool> = [];
 	public static var replayMode:Bool = false;
 	private var replayExam:Replay;
 
@@ -421,6 +435,12 @@ class PlayState extends MusicBeatState
 		guitarHeroSustains = ClientPrefs.data.guitarHeroSustains;
 		if (ClientPrefs.data.playOpponent)
 			cpuControlled = ClientPrefs.data.botOpponentFix;
+
+		// 本地双人模式：玩家在游玩中按下数字键 2 → 待生效标记在此被消费
+		twoPlayerLocal = pendingTwoPlayer;
+		pendingTwoPlayer = false;
+		if (twoPlayerLocal)
+			cpuControlled_opponent = false; // 对手交给玩家 2，CPU 不再自动代打
 
 		replayExam = new Replay(this);
 		add(replayExam);
@@ -1952,6 +1972,32 @@ class PlayState extends MusicBeatState
 						swagNote.noteType = '';
 				}
 
+				// 自定义单个 Note 形式：谱面可以在第 5 / 6 个字段给单个音符指定
+				// 自己的贴图（noteSkin）与打击特效贴图（noteSplash）。
+				// 不写这两个字段的老谱面完全不受影响。
+				if (songNotes.length > 4)
+				{
+					var rawSkin:Dynamic = songNotes[4];
+					if (Std.isOfType(rawSkin, String) && rawSkin != '')
+						swagNote.texture = rawSkin;
+				}
+				if (songNotes.length > 5)
+				{
+					var rawSplash:Dynamic = songNotes[5];
+					if (Std.isOfType(rawSplash, String) && rawSplash != '')
+					{
+						swagNote.noteSplashTexture = rawSplash;
+						swagNote.noteSplashData.texture = rawSplash;
+					}
+				}
+				// 第 7 个字段：单个音符自己的打击音效（'hitsounds/xxx' 或 'xxx'）
+				if (songNotes.length > 6)
+				{
+					var rawSound:Dynamic = songNotes[6];
+					if (Std.isOfType(rawSound, String) && rawSound != '')
+						swagNote.hitsound = rawSound;
+				}
+
 				swagNote.scrollFactor.set();
 
 				unspawnNotes.push(swagNote);
@@ -3081,6 +3127,15 @@ class PlayState extends MusicBeatState
 		}
 		#end
 
+		// 本地双人：按数字键 2 立刻用双人模式重开当前曲目（再按一次切回单人）
+		if (FlxG.keys.justPressed.TWO && !paused && !endingSong && !startingSong)
+		{
+			pendingTwoPlayer = !twoPlayerLocal;
+			FlxG.sound.play(Paths.sound('confirmMenu'));
+			MusicBeatState.resetState();
+			return;
+		}
+
 		setOnScripts('cameraX', camFollow.x);
 		setOnScripts('cameraY', camFollow.y);
 		setOnScripts('botPlay', cpuControlled);
@@ -3811,6 +3866,10 @@ class PlayState extends MusicBeatState
 		}
 		else keysArray = ['note_left', 'note_down', 'note_up', 'note_right'];
 
+		keysArrayP2 = [];
+		for (i in 0...keysArray.length)
+			keysArrayP2.push('p2_key_$i');
+
 		_hold = [];
 		_press = [];
 		_release = [];
@@ -3819,6 +3878,16 @@ class PlayState extends MusicBeatState
 			_hold.push(false);
 			_press.push(false);
 			_release.push(false);
+		}
+
+		_holdP2 = [];
+		_pressP2 = [];
+		_releaseP2 = [];
+		for (i in 0...keysArrayP2.length)
+		{
+			_holdP2.push(false);
+			_pressP2.push(false);
+			_releaseP2.push(false);
 		}
 	}
 
@@ -5069,6 +5138,124 @@ class PlayState extends MusicBeatState
 			for (i in 0..._release.length)
 				if (_release[i] || strumsBlocked[i] == true)
 					keyReleased(i);
+
+		// 本地双人模式：同时轮询玩家 2 的按键（打对手谱面）
+		if (twoPlayerLocal)
+			p2KeysCheck();
+	}
+
+	/**
+	 * 本地双人模式：轮询玩家 2 的按键并处理命中（对手谱面）。
+	 * 逻辑刻意保持最小 —— 只做「按下找最近音符」+「长按吃 sustain」，
+	 * 命中后统一交给 opponentNoteHitForOpponent，复用既有的
+	 * 连击 / 分数 / 回血 / 打击音效 / dad 动画流程。
+	 */
+	private function p2KeysCheck():Void
+	{
+		if (keysArrayP2.length < 1)
+			return;
+
+		for (i in 0...keysArrayP2.length)
+		{
+			var key:String = keysArrayP2[i];
+			_holdP2[i] = controls.pressed(key);
+			_pressP2[i] = controls.justPressed(key);
+			_releaseP2[i] = controls.justReleased(key);
+		}
+
+		if (generatedMusic && startedCountdown && !endingSong)
+		{
+			var inputSongPos:Float = Conductor.songPosition;
+
+			for (i in 0..._pressP2.length)
+				if (_pressP2[i])
+					p2TapLane(i, inputSongPos);
+
+			// 长按：按住时逐帧吃掉对手侧的 sustain
+			if (_holdP2.contains(true) && notes.length > 0)
+			{
+				var len:Int = notes.length;
+				var i:Int = 0;
+				while (i < len)
+				{
+					var daNote:Note = cast notes.members[i];
+					if (daNote != null && daNote.exists && daNote.alive
+						&& !daNote.mustPress && daNote.isSustainNote
+						&& !daNote.wasGoodHit && !daNote.blockHit && daNote.canHold
+						&& daNote.noteData >= 0 && daNote.noteData < _holdP2.length
+						&& _holdP2[daNote.noteData]
+						&& daNote.strumTime <= inputSongPos)
+					{
+						opponentNoteHitForOpponent(daNote);
+					}
+					i++;
+				}
+			}
+		}
+
+		p2RefreshStrums();
+	}
+
+	/** 玩家 2 按下：找该轨道上最接近的可命中音符（与 goodNoteHit 取最近的思路一致） */
+	private function p2TapLane(lane:Int, inputSongPos:Float):Void
+	{
+		var bestNote:Note = null;
+		if (notes.length > 0)
+		{
+			var len:Int = notes.length;
+			var i:Int = 0;
+			while (i < len)
+			{
+				var n:Note = cast notes.members[i];
+				if (n != null && n.exists && n.alive
+					&& n.canBeHit && !n.wasGoodHit && !n.blockHit && !n.isSustainNote
+					&& !n.mustPress && n.noteData == lane)
+				{
+					if (bestNote == null || n.strumTime < bestNote.strumTime)
+						bestNote = n;
+				}
+				i++;
+			}
+		}
+
+		if (bestNote != null)
+		{
+			if (bestNote.tail.length > 0)
+			{
+				for (childNote in bestNote.tail)
+					childNote.canHold = true;
+			}
+			opponentNoteHitForOpponent(bestNote);
+		}
+
+		if (lane < opponentStrums.members.length)
+		{
+			var spr:StrumNote = opponentStrums.members[lane];
+			if (spr != null && spr.animation.curAnim.name != 'confirm')
+			{
+				spr.playAnim('pressed');
+				spr.resetAnim = 0;
+			}
+		}
+	}
+
+	/** 玩家 2 松手时把对手轨的按键表现复位 */
+	private function p2RefreshStrums():Void
+	{
+		for (i in 0..._releaseP2.length)
+		{
+			if (!_releaseP2[i])
+				continue;
+			if (i < opponentStrums.members.length)
+			{
+				var spr:StrumNote = opponentStrums.members[i];
+				if (spr != null)
+				{
+					spr.playAnim('static');
+					spr.resetAnim = 0;
+				}
+			}
+		}
 	}
 
 	public function noteMiss(daNote:Note, ?index:Int = -1):Void

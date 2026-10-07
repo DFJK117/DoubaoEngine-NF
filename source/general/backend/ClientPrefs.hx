@@ -2176,7 +2176,26 @@ class ClientPrefs
 		'volume_down' => [NUMPADMINUS, MINUS],
 		'debug_1' => [SEVEN],
 		'debug_2' => [EIGHT],
-		'fullscreen' => [F11]
+		'fullscreen' => [F11],
+
+		// 本地双人模式：玩家 2 的独立按键组（默认小键盘 1-9 / 0 / . / + / - / * / /）
+		// 这里用 FlxKey 的原始整数值书写（97..105 = 小键盘 1..9，96 = 小键盘 0），
+		// 避免依赖不同 flixel 版本里可能不一致的 NUMPAD* 常量名。
+		'p2_key_0' => [97],
+		'p2_key_1' => [98],
+		'p2_key_2' => [99],
+		'p2_key_3' => [100],
+		'p2_key_4' => [101],
+		'p2_key_5' => [102],
+		'p2_key_6' => [103],
+		'p2_key_7' => [104],
+		'p2_key_8' => [105],
+		'p2_key_9' => [96],
+		'p2_key_10' => [110],
+		'p2_key_11' => [107],
+		'p2_key_12' => [109],
+		'p2_key_13' => [106],
+		'p2_key_14' => [111]
 	];
 	public static var defaultMobileBinds:Map<String, Array<FlxKey>> = null;
 	public static var defaultKeys:Map<String, Array<FlxKey>> = null;
@@ -2200,6 +2219,50 @@ class ClientPrefs
 		var keyBind:Array<FlxKey> = keyBinds.get(key);
 		while (keyBind != null && keyBind.contains(NONE))
 			keyBind.remove(NONE);
+		// 补回两个槽位：见 padKeyBind 的说明
+		padKeyBind(key);
+	}
+
+	/**
+	 * 把某个按键的绑定数组补齐到固定的 2 个槽位。
+	 *
+	 * 这是「自定义按键设了没反应」的根因修复：默认键盘里存在大量只有 1 个元素的
+	 * 绑定（如 '0_key_0' => [SPACE]），而键位界面提供「槽位 1 / 槽位 2」两栏。
+	 * 直接对长度不足的数组写 binds[1]，在部分目标平台（特别是不自动扩容的实现）
+	 * 是静默失败的 —— 界面看起来改了，实际保存的数组没变，游戏里自然按不动。
+	 * 统一补到 2 槽后，写入与读取都不会越界。
+	 */
+	public static function padKeyBind(key:String):Array<FlxKey>
+	{
+		var keyBind:Array<FlxKey> = keyBinds.get(key);
+		if (keyBind == null)
+		{
+			keyBind = [];
+			keyBinds.set(key, keyBind);
+		}
+		while (keyBind.length < 2)
+			keyBind.push(NONE);
+		return keyBind;
+	}
+
+	/** 安全写入某个绑定的槽位（0 或 1），并自动避免两个槽位被设成同一个键 */
+	public static function setKeyBind(key:String, slot:Int, value:FlxKey):Void
+	{
+		var keyBind:Array<FlxKey> = padKeyBind(key);
+		var idx:Int = (slot == 1) ? 1 : 0;
+		keyBind[idx] = value;
+		if (keyBind[0] == keyBind[1])
+			keyBind[1 - idx] = NONE;
+		clearInvalidKeys(key);
+	}
+
+	/** 读档 / 初始化后统一规整全部绑定，保证界面显示与游戏内读取完全一致 */
+	public static function normalizeKeyBinds():Void
+	{
+		if (keyBinds == null)
+			return;
+		for (key in keyBinds.keys())
+			padKeyBind(key);
 	}
 
 	public static function loadDefaultKeys()
@@ -2605,6 +2668,9 @@ class ClientPrefs
 			FlxG.sound.volume = FlxG.save.data.volume;
 		if (FlxG.save.data.mute != null)
 			FlxG.sound.muted = FlxG.save.data.mute;
+
+		// 读档后统一补齐按键槽位，保证「设置界面显示 == 游戏内实际读取」
+		normalizeKeyBinds();
 
 		#if DISCORD_ALLOWED
 		DiscordClient.check();

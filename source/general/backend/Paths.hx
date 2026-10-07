@@ -856,6 +856,18 @@ class Paths
 	inline static public function mods(key:String = '')
 	{
 		var result:String = #if mobile Sys.getCwd() + #end 'mods/' + key;
+		// 模组互通：本地 mods 目录里没有这一项时，回退到 mods/_shared.txt
+		// 声明的共享模组根目录（见 Mods.getSharedModRoots）。放在共享目录里的
+		// 模组可以原样被游戏的路径系统解析，不需要拷到本地 mods 里。
+		if (key.length > 0 && !FileSystem.exists(result))
+		{
+			for (root in Mods.getSharedModRoots())
+			{
+				var alt:String = root + key;
+				if (FileSystem.exists(alt))
+					return alt;
+			}
+		}
 		if (DeepDebugTracker.active && key.length > 0 && FileSystem.exists(result))
 			DeepDebugTracker.recordResolved(result);
 		return result;

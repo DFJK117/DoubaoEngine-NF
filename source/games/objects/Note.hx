@@ -881,6 +881,15 @@ class Note extends FlxSprite
 		animation.addByPrefix(name, prefix, framerate, doLoop);
 	}
 
+	/**
+	 * 本地双人模式是否开启。开启时对手侧（!mustPress）音符由玩家 2 手动击打，
+	 * Note.update 不再把它们在到点时自动标成 wasGoodHit。
+	 */
+	static function twoPlayerEnabled():Bool
+	{
+		return (PlayState.instance != null && PlayState.instance.twoPlayerLocal);
+	}
+
 	override function update(elapsed:Float)
 	{
 		super.update(elapsed);
@@ -908,7 +917,8 @@ class Note extends FlxSprite
 		}
 		else
 		{
-			if (ClientPrefs.data.playOpponent)
+			// 本地双人模式下对手归玩家 2，不能再自动命中（否则玩家 2 形同虚设）
+			if (ClientPrefs.data.playOpponent || twoPlayerEnabled())
 			{
 				canBeHit = (strumTime > Conductor.songPosition - (Conductor.safeZoneOffset * lateHitMult)
 					&& strumTime < Conductor.songPosition + (Conductor.safeZoneOffset * earlyHitMult));

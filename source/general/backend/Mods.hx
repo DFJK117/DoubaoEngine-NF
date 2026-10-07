@@ -33,6 +33,52 @@ class Mods
 
 	private static var globalMods:Array<String> = [];
 
+	/**
+	 * 模组互通：额外的「共享模组根目录」。
+	 *
+	 * 在 mods/_shared.txt 里一行写一个目录，Windows 上可以是别的盘或另一台
+	 * 机器的目录，安卓上可以是 Download 之类大家都能读写的共享位置。写在里面
+	 * 的目录下的每个子文件夹都会被当成可用模组 —— 同一份模组就能在
+	 * Windows 版 / 安卓版 / 不同机器之间直接互通，不用反复拷贝覆盖。
+	 *
+	 * 结果会缓存：getSharedModRoots 被 Paths.mods() 高频调用，不能每次都读盘。
+	 */
+	private static var cachedSharedModRoots:Array<String> = null;
+
+	public static function getSharedModRoots():Array<String>
+	{
+		if (cachedSharedModRoots != null)
+			return cachedSharedModRoots;
+
+		var roots:Array<String> = [];
+		#if MODS_ALLOWED
+		try
+		{
+			// 注意：这里必须直接写字面路径，不能走 Paths.mods()，否则会和
+			// Paths.mods 的回退逻辑互相调用（无限递归）。
+			var listFile:String = #if mobile Sys.getCwd() + #end 'mods/_shared.txt';
+			if (FileSystem.exists(listFile))
+			{
+				for (line in File.getContent(listFile).split('\n'))
+				{
+					var root:String = line.trim();
+					if (root.length < 1 || root.startsWith('#'))
+						continue;
+					root = haxe.io.Path.addTrailingSlash(root);
+					if (FileSystem.exists(root) && FileSystem.isDirectory(root) && !roots.contains(root))
+						roots.push(root);
+				}
+			}
+		}
+		catch (e)
+		{
+			trace('[Mods] failed to read _shared.txt: ' + e);
+		}
+		#end
+		cachedSharedModRoots = roots;
+		return roots;
+	}
+
 	inline public static function getGlobalMods()
 		return globalMods;
 
@@ -60,6 +106,24 @@ class Mods
 				var path = haxe.io.Path.join([modsFolder, folder]);
 				if (FileSystem.isDirectory(path) && !ignoreModFolders.contains(folder) && !list.contains(folder))
 					list.push(folder);
+			}
+		}
+
+		// 模组互通：共享模组根里的子目录同样算可用模组（见 getSharedModRoots）
+		for (root in getSharedModRoots())
+		{
+			try
+			{
+				for (folder in FileSystem.readDirectory(root))
+				{
+					var path:String = root + folder;
+					if (FileSystem.isDirectory(path) && !ignoreModFolders.contains(folder) && !list.contains(folder))
+						list.push(folder);
+				}
+			}
+			catch (e)
+			{
+				trace('[Mods] unreadable shared root $root: $e');
 			}
 		}
 		#end

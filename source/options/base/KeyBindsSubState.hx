@@ -504,16 +504,13 @@ class KeyBindsSubState extends MusicBeatSubstate
 			if (holdingTime > 0.5)
 			{
 				var entry = entries[categories[curCat].first + curEntry];
-				var binds:Array<FlxKey> = ClientPrefs.keyBinds.get(entry.key);
-				if (binds != null)
-				{
-					binds[curSlot] = FlxKey.NONE;
-					ClientPrefs.clearInvalidKeys(entry.key);
-				}
+				// 走统一写入接口：补齐槽位后再写，避免对长度不足的数组越界赋值（设了不生效的老 bug）
+				ClientPrefs.setKeyBind(entry.key, curSlot, FlxKey.NONE);
 				isBinding = false;
 				bindingText.visible = false;
 				FlxG.sound.play(Paths.sound('cancelMenu'));
 				updateView();
+				return;
 			}
 			return;
 		}
@@ -527,37 +524,36 @@ class KeyBindsSubState extends MusicBeatSubstate
 
 			if (keyPressed > -1 && keyPressed != FlxKey.ESCAPE && keyPressed != FlxKey.BACKSPACE)
 			{
-				var entry = entries[categories[curCat].first + curEntry];
-				var binds:Array<FlxKey> = ClientPrefs.keyBinds.get(entry.key);
-				if (binds != null)
-				{
-					binds[curSlot] = keyPressed;
-					if (binds[0] == binds[1])
-						binds[1 - curSlot] = FlxKey.NONE;
-					ClientPrefs.clearInvalidKeys(entry.key);
-				}
-				FlxG.sound.play(Paths.sound('confirmMenu'));
-				isBinding = false;
-				bindingText.visible = false;
-				updateView();
-			}
-			else if (keyReleased > -1 && (keyReleased == FlxKey.ESCAPE || keyReleased == FlxKey.BACKSPACE))
-			{
-				var entry = entries[categories[curCat].first + curEntry];
-				var binds:Array<FlxKey> = ClientPrefs.keyBinds.get(entry.key);
-				if (binds != null)
-				{
-					binds[curSlot] = keyReleased;
-					if (binds[0] == binds[1])
-						binds[1 - curSlot] = FlxKey.NONE;
-					ClientPrefs.clearInvalidKeys(entry.key);
-				}
-				FlxG.sound.play(Paths.sound('confirmMenu'));
-				isBinding = false;
-				bindingText.visible = false;
-				updateView();
-			}
+			var entry = entries[categories[curCat].first + curEntry];
+			// 走统一写入接口：先补齐槽位再写，避免越界赋值被静默丢弃
+			ClientPrefs.setKeyBind(entry.key, curSlot, keyPressed);
+			FlxG.sound.play(Paths.sound('confirmMenu'));
+			isBinding = false;
+			bindingText.visible = false;
+			updateView();
 		}
+		else if (keyReleased > -1 && (keyReleased == FlxKey.ESCAPE || keyReleased == FlxKey.BACKSPACE))
+		{
+			var entry = entries[categories[curCat].first + curEntry];
+			ClientPrefs.setKeyBind(entry.key, curSlot, keyReleased);
+			FlxG.sound.play(Paths.sound('confirmMenu'));
+			isBinding = false;
+			bindingText.visible = false;
+			updateView();
+		}
+		}
+	}
+
+	/**
+	 * 读取某个绑定的第 slot 个按键用于显示。
+	 * 数组为空 / 槽位不存在（旧存档或尚未补齐）时统一显示 '---'，
+	 * 不要让越界值流到 InputFormatter 里。
+	 */
+	function keybindName(binds:Null<Array<FlxKey>>, slot:Int):String
+	{
+		if (binds == null || slot < 0 || slot >= binds.length)
+			return '---';
+		return InputFormatter.getKeyName(binds[slot]);
 	}
 
 	function updateView()
@@ -576,8 +572,8 @@ class KeyBindsSubState extends MusicBeatSubstate
 			var idx = cat.first + i;
 			var entry = entries[idx];
 			var binds:Array<FlxKey> = ClientPrefs.keyBinds.get(entry.key);
-			var s1:String = (binds != null) ? InputFormatter.getKeyName(binds[0]) : '---';
-			var s2:String = (binds != null) ? InputFormatter.getKeyName(binds[1]) : '---';
+			var s1:String = keybindName(binds, 0);
+			var s2:String = keybindName(binds, 1);
 			var displayName:String = Language.get('kb_' + entry.key, 'controls');
 			if (displayName == 'kb_' + entry.key || displayName == 'kb_' + entry.key + ' (404)') displayName = entry.name;
 			var t = entryTexts[i];
@@ -589,8 +585,8 @@ class KeyBindsSubState extends MusicBeatSubstate
 		var curEntryIdx = cat.first + curEntry;
 		var curEntryData = entries[curEntryIdx];
 		var curBinds:Array<FlxKey> = ClientPrefs.keyBinds.get(curEntryData.key);
-		var curS1:String = (curBinds != null) ? InputFormatter.getKeyName(curBinds[0]) : '---';
-		var curS2:String = (curBinds != null) ? InputFormatter.getKeyName(curBinds[1]) : '---';
+		var curS1:String = keybindName(curBinds, 0);
+		var curS2:String = keybindName(curBinds, 1);
 		slotText.text = 'Slot 1: ' + curS1 + (curSlot == 0 ? ' <' : '  ') + '    |    Slot 2: ' + curS2 + (curSlot == 1 ? ' <' : '  ');
 
 		// ===== Keyboard highlighting:

@@ -47,11 +47,31 @@ class AudioGroup extends OptionCata
 
         var hitsoundArray:Array<String> = ['Default'];
 
-        for (folder in Mods.directoriesWithFile(Paths.getSharedPath(), 'sounds/hitsounds/')){
-			for (file in FileSystem.readDirectory(folder))
+        // 自定义按键音效：把「所有可能放有 sounds/hitsounds/*.ogg 的目录」都扫一遍。
+        // 原逻辑只扫共享目录 + 全局模组 + mods 根 + 当前载入的模组，
+        // 于是玩家丢进某个（未启用/未设为全局的）模组里的打击音在下拉框里根本找不到。
+        // 现在 mods 目录下**每一个**模组都会被扫到，重名只保留第一个。
+        var hitsoundFolders:Array<String> = Mods.directoriesWithFile(Paths.getSharedPath(), 'sounds/hitsounds/');
+        for (mod in Mods.getModDirectories())
+        {
+            var folder:String = Paths.mods(mod + '/sounds/hitsounds/');
+            if (FileSystem.exists(folder) && !hitsoundFolders.contains(folder))
+                hitsoundFolders.push(folder);
+        }
+
+        for (folder in hitsoundFolders)
+        {
+			if (FileSystem.exists(folder))
 			{
-				if (file.endsWith('.ogg'))
-					hitsoundArray.push(file.replace('.ogg', ''));
+				for (file in FileSystem.readDirectory(folder))
+				{
+					if (file.endsWith('.ogg'))
+					{
+						var name:String = file.replace('.ogg', '');
+						if (!hitsoundArray.contains(name))
+							hitsoundArray.push(name);
+					}
+				}
 			}
         }
 
